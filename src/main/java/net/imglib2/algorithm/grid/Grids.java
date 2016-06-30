@@ -53,7 +53,8 @@ public class Grids {
 	 * @param gap
 	 *            distance/gap between two patches
 	 * @param span
-	 *            span of each patch: size = 2 * span + 1
+	 *            span of the neighborhood of each patch: size =
+	 *            <code>2 × span[d] + 1</code>
 	 * @param whichDims
 	 *            array contains zeros and ones and defines which dimensions the
 	 *            patches have

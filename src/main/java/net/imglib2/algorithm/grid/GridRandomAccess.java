@@ -33,160 +33,59 @@
  */
 package net.imglib2.algorithm.grid;
 
-import net.imglib2.Localizable;
+import net.imglib2.Point;
 import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.Sampler;
+import net.imglib2.view.Views;
 
 /**
  * {@link RandomAccess} for a grid.
  * 
  * @author Simon Schmid (University of Konstanz)
  */
-public class GridRandomAccess<T> implements RandomAccess<RandomAccessibleInterval<T>> {
+public class GridRandomAccess<T> extends Point implements RandomAccess<RandomAccessibleInterval<T>> {
 
-	private long[] position; // current position
-	private Patch<T> patch; // current patch
+	private RandomAccessibleInterval<T> srcImage;
+	private long[] gap; // gap between two patches
+	private long[] span; // span of the neighborhood of a patch -> size of patch
+							// = 2 × span[d] + 1
+	private int[] whichDims; // array contains zeros and ones and defines which
+								// dimensions the patches have
+	private long[] patchDims; // dimensions of the patch
 	private long[] origin; // origin of the grid in the coordinates of the
 							// source image
 	private long[] gridDims; // dimensions of the grid
+
 	// if parameters are added here, add them also in the copyRandomAccess()
 	// method
 
-	private GridRandomAccess(GridRandomAccess<T> access) {
-		this.position = position.clone();
-		this.patch = access.patch;
-		this.origin = access.origin.clone();
-		this.gridDims = access.gridDims.clone();
+	private GridRandomAccess(GridRandomAccess<T> gridRA) {
+		super(new long[gridRA.whichDims.length]);
+		this.origin = gridRA.origin.clone();
+		this.gridDims = gridRA.gridDims.clone();
+		this.gap = gridRA.gap.clone();
+		this.span = gridRA.span.clone();
+		this.whichDims = gridRA.whichDims.clone();
+		this.patchDims = gridRA.patchDims.clone();
 	}
 
 	public GridRandomAccess(RandomAccessibleInterval<T> srcImage, long[] gap, long[] span, int[] whichDims,
 			long[] origin, long[] gridDims) {
-		this.position = new long[srcImage.numDimensions()];
-		this.patch = new Patch<>(srcImage, gap, span, whichDims);
+		super(new long[whichDims.length]);
+		this.srcImage = srcImage;
+		this.gap = gap;
+		this.span = span;
+		this.whichDims = whichDims;
 		this.origin = origin;
 		this.gridDims = gridDims;
-	}
-
-	@Override
-	public int getIntPosition(int arg0) {
-		return (int) position[arg0];
-	}
-
-	@Override
-	public long getLongPosition(int arg0) {
-		return position[arg0];
-	}
-
-	@Override
-	public void localize(int[] arg0) {
-		for (int i = 0; i < arg0.length; i++) {
-			arg0[i] = (int) position[i];
+		this.patchDims = new long[whichDims.length];
+		for (int i = 0; i < whichDims.length; i++) {
+			if (whichDims[i] == 0)
+				patchDims[i] = 1;
+			else
+				patchDims[i] = span[i] * 2 + 1;
 		}
-	}
-
-	@Override
-	public void localize(long[] arg0) {
-		arg0 = position;
-	}
-
-	@Override
-	public double getDoublePosition(int arg0) {
-		return position[arg0];
-	}
-
-	@Override
-	public float getFloatPosition(int arg0) {
-		return position[arg0];
-	}
-
-	@Override
-	public void localize(float[] arg0) {
-		for (int i = 0; i < arg0.length; i++) {
-			arg0[i] = position[i];
-		}
-	}
-
-	@Override
-	public void localize(double[] arg0) {
-		for (int i = 0; i < arg0.length; i++) {
-			arg0[i] = position[i];
-		}
-	}
-
-	@Override
-	public int numDimensions() {
-		return position.length;
-	}
-
-	@Override
-	public void bck(int arg0) {
-		position[arg0]--;
-
-	}
-
-	@Override
-	public void fwd(int arg0) {
-		position[arg0]++;
-
-	}
-
-	@Override
-	public void move(Localizable arg0) {
-		for (int i = 0; i < arg0.numDimensions(); i++) {
-			position[i] += arg0.getIntPosition(i);
-		}
-	}
-
-	@Override
-	public void move(int[] arg0) {
-		for (int i = 0; i < arg0.length; i++) {
-			position[i] += arg0[i];
-		}
-	}
-
-	@Override
-	public void move(long[] arg0) {
-		for (int i = 0; i < arg0.length; i++) {
-			position[i] += arg0[i];
-		}
-	}
-
-	@Override
-	public void move(int arg0, int arg1) {
-		position[arg1] += arg0;
-	}
-
-	@Override
-	public void move(long arg0, int arg1) {
-		position[arg1] += arg0;
-	}
-
-	@Override
-	public void setPosition(Localizable arg0) {
-		arg0.localize(position);
-	}
-
-	@Override
-	public void setPosition(int[] arg0) {
-		for (int i = 0; i < position.length; i++) {
-			position[i] = arg0[i];
-		}
-	}
-
-	@Override
-	public void setPosition(long[] arg0) {
-		position = arg0;
-	}
-
-	@Override
-	public void setPosition(int arg0, int arg1) {
-		position[arg1] = arg0;
-	}
-
-	@Override
-	public void setPosition(long arg0, int arg1) {
-		position[arg1] = arg0;
 	}
 
 	@Override
@@ -195,14 +94,35 @@ public class GridRandomAccess<T> implements RandomAccess<RandomAccessibleInterva
 	}
 
 	@Override
-	public Patch<T> get() {
+	public RandomAccessibleInterval<T> get() {
 		// check if position is inside of the interval
-		for (int i = 0; i < position.length; i++) {
-			if ((position[i] < 0) || (position[i] >= gridDims[i]))
+		for (int i = 0; i < whichDims.length; i++) {
+			if ((getLongPosition(i) < 0) || (getLongPosition(i) >= gridDims[i]))
 				throw new IndexOutOfBoundsException("Position is out of bounds!");
 		}
-		patch.update(position, origin);
-		return patch;
+
+		// compute the actual position of the patch in the coordinates of the
+		// source image
+		long[] patchPos = new long[whichDims.length];
+		for (int i = 0; i < whichDims.length; i++) {
+			patchPos[i] = origin[i] + getLongPosition(i) * gap[i];
+		}
+
+		// compute min and max of the interval of the patch
+		long[] min = new long[patchPos.length];
+		long[] max = new long[patchPos.length];
+		for (int i = 0; i < patchPos.length; i++) {
+			if (whichDims[i] == 1) {
+				min[i] = patchPos[i] - span[i];
+				max[i] = patchPos[i] + span[i];
+			} else {
+				min[i] = patchPos[i];
+				max[i] = patchPos[i];
+			}
+		}
+
+		return Views.offsetInterval(srcImage, patchPos, patchDims);
+
 	}
 
 	@Override

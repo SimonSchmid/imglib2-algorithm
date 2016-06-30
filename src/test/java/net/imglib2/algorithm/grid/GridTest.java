@@ -54,8 +54,8 @@ public class GridTest {
 	@Test
 	public void gridTest() {
 		// test parameters
-		final long span = 5;
-		final long gap = 4;
+		final long[] span = new long[] { 5, 4, 3 };
+		final long[] gap = new long[] { 4, 2, 3 };
 		final int[] whichDims = new int[] { 1, 0, 1 };
 		final long[] pos = new long[] { 5, 2, 0 };
 
@@ -65,23 +65,25 @@ public class GridTest {
 		Grid<FloatType> grid = Grids.createGrid(img, gap, span, whichDims);
 		RandomAccess<RandomAccessibleInterval<FloatType>> raGrid = grid.randomAccess();
 		raGrid.setPosition(pos);
-		Patch<FloatType> patch = (Patch<FloatType>) raGrid.get();
+		RandomAccessibleInterval<FloatType> patch = raGrid.get();
 
 		// check patch dimensions
 		assertEquals(patch.numDimensions(), whichDims.length);
 		for (int i = 0; i < whichDims.length; i++) {
+			assertEquals(raGrid.getLongPosition(i), pos[i]);
 			assertEquals(patch.min(i), 0);
 			if (whichDims[i] == 0)
 				assertEquals(patch.dimension(i), 1);
 			else
-				assertEquals(patch.dimension(i), span * 2 + 1);
+				assertEquals(patch.dimension(i), span[i] * 2 + 1);
 		}
 
 		// check grid dimensions
 		assertEquals(grid.numDimensions(), whichDims.length);
 		assertEquals(grid.dimension(0), 6);
 		for (int i = 0; i < whichDims.length; i++) {
-			assertEquals(grid.dimension(i), (int) img.dimension(i) / gap - 1);
+			assertEquals(grid.dimension(i), (int) img.dimension(i) / gap[i] - 1);
 		}
+
 	}
 }
